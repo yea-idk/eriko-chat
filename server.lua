@@ -48,7 +48,7 @@ function decodeURI(s)
 	return s
 end
 
-defaulttbl = 'Eriko (system),Hey! Welcome to Eriko Chat!\\nYour home address is http://' .. sdomain .. ':' .. sport .. ' use this during login otherwise you will be unable to access your account!\\nThe default home address is http://eriko.one:30080\\nYou cannot communicate with other homes at the moment. Please register with other homes if you wish to use them.,'
+defaulttbl = 'Eriko (system),Eriko (system),Hey! Welcome to Eriko Chat!\\nYour home address is http://' .. sdomain .. ':' .. sport .. ' use this during login otherwise you will be unable to access your account!\\nThe default home address is http://eriko.one:30080\\nYou cannot communicate with other homes at the moment. Please register with other homes if you wish to use them.,'
 
 --/login/[user]/[pass]/[2fpass]/[type]/[target]/[content]/
 --|  2  |   3  |   4  |  5     |   6  |    7   |    8    |
@@ -125,8 +125,8 @@ http.createServer(function (req, res)
 							if (urltbl[6] == 'update') then
 								body.messages = {}
 								for line in io.lines("./users/" .. urltbl[3] .. ".csv") do
-									local from, contents = line:match("%s*(.-),%s*(.-),")
-									body.messages[#body.messages + 1] = {from = from, contents = contents,}
+									local from, to, contents = line:match("%s*(.-),%s*(.-),%s*(.-),")
+									body.messages[#body.messages + 1] = {from = from, contents = contents, to = to,}
 								end
 							elseif (urltbl[6] == 'post') then
 								if (urltbl[7]) and (urltbl[8]) then
@@ -146,7 +146,10 @@ http.createServer(function (req, res)
 										file:close()
 									end
 									file = io.open('./users/' .. urltbl[7] .. '.csv', 'a+')
-									file:write('\n' .. urltbl[3] .. ',' .. decodeURI(urltbl[8]) .. ',')
+									file:write('\n' .. urltbl[3] .. ',' .. urltbl[3] .. ',' .. decodeURI(urltbl[8]) .. ',')
+									file:close()
+									file = io.open('./users/' .. urltbl[3] .. '.csv', 'a+')
+									file:write('\n' .. urltbl[3] .. ',' .. urltbl[7] .. ',' .. decodeURI(urltbl[8]) .. ',')
 									file:close()
 								else
 									perror(8)
