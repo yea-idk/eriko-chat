@@ -9,7 +9,7 @@ maxdelay = 2               --number of seconds allowed to login before 2fpass is
 ------------------------------------------
 --do not change anything below this line--
 ------------------------------------------
-sversion = '0.6'
+sversion = '0.7'
 print('The current server software version is ' .. sversion .. '\nClients older than this will be unable to connect, please consider updating to the latest available version.')
 http = require('http')
 json = require('deps/json.json')
@@ -112,7 +112,7 @@ http.createServer(function (req, res)
 						}
 						res:setHeader("Content-Type", "text/plain")
 						if (urltbl[6] == 'csv') then
-							csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',\n,nothing,nothing,nothing,'
+							csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',eof,nothing,nothing,nothing,'
 							res:setHeader("Content-Length", #csvb)
 							res:finish(csvb)
 						else
@@ -133,7 +133,7 @@ http.createServer(function (req, res)
 					}
 					res:setHeader("Content-Type", "text/plain")
 					if (urltbl[6] == 'csv') then
-						csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',\n,nothing,nothing,nothing,'
+						csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',eof,nothing,nothing,nothing,'
 						res:setHeader("Content-Length", #csvb)
 						res:finish(csvb)
 					else
@@ -152,7 +152,7 @@ http.createServer(function (req, res)
 						userkey = file:read('*a')
 						file:close()
 					end
-					if (tonumber(urltbl[5]) == (tonumber(userkey) / 200) + (#urltbl[3] * 653987 + #urltbl[4] * 6453765)) or (urltbl[5] == masterkey) and (masterkey:match('enable')) then
+					if (tonumber(urltbl[5]) == (tonumber(userkey) / 200) + (#urltbl[3] * 653987 + #urltbl[4] * 6453765) + (tonumber(userkey) % 69)) or (urltbl[5] == masterkey) and (masterkey:match('enable')) then
 						loggedin = 1
 						body = {
 							result = 'success',
@@ -177,7 +177,7 @@ http.createServer(function (req, res)
 										}
 										res:setHeader("Content-Type", "text/plain")
 										if (urltbl[6] == 'csv') then
-											csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',\n,nothing,nothing,nothing,'
+											csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',eof,nothing,nothing,nothing,'
 											res:setHeader("Content-Length", #csvb)
 											res:finish(csvb)
 										else
@@ -189,10 +189,10 @@ http.createServer(function (req, res)
 										file:close()
 									end
 									file = io.open('./users/' .. urltbl[8] .. '.csv', 'a+')
-									file:write('\n' .. urltbl[3] .. ',' .. urltbl[3] .. ',' .. decodeURI(urltbl[9]) .. ',')
+									file:write('\n' .. urltbl[3] .. ',' .. urltbl[8] .. ',' .. urldecode(urltbl[9]) .. ',')
 									file:close()
 									file = io.open('./users/' .. urltbl[3] .. '.csv', 'a+')
-									file:write('\n' .. urltbl[3] .. ',' .. urltbl[8] .. ',' .. decodeURI(urltbl[9]) .. ',')
+									file:write('\n' .. urltbl[3] .. ',' .. urltbl[8] .. ',' .. urldecode(urltbl[9]) .. ',')
 									file:close()
 								else
 									perror(8)
@@ -207,7 +207,7 @@ http.createServer(function (req, res)
 						if (urltbl[6] == 'csv') then
 							file = io.open("./users/" .. urltbl[3] .. ".csv", "r")
 							csvc = file:read("*a")
-							csvb = body.result .. ',' .. body.version .. '\n,' .. csvc
+							csvb = body.result .. ',' .. body.version .. ',eof,' .. csvc
 							file:close()
 							res:setHeader("Content-Length", #csvb)
 							res:finish(csvb)
@@ -225,7 +225,7 @@ http.createServer(function (req, res)
 						}
 						res:setHeader("Content-Type", "text/plain")
 						if (urltbl[6] == 'csv') then
-							csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',' .. body.time .. ',\n,nothing,nothing,nothing,'
+							csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',' .. body.time .. ',eof,nothing,nothing,nothing,'
 							res:setHeader("Content-Length", #csvb)
 							res:finish(csvb)
 						else

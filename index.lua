@@ -14,7 +14,7 @@ sel = Color.new(203, 171, 155) --eriko
 math.randomseed(System.getFreeSpace("ux0:"))
 eriko = Graphics.loadImage("app0:/image/Eriko" .. math.random(8) .. ".png")
 meiryo = Font.load("app0:/font/Meiyro.ttf")
-version = "0.6"
+version = "0.7"
 
 function splittotable(str, splt)
 	local tmp = {}
@@ -165,53 +165,58 @@ end
 
 logtbl = splittotable(contents, "\n")
 Network.init()
-function update()
-	result = Network.requestString(logtbl[3] .. "/" .. logtbl[1] .. "/" .. logtbl[2] .. "/0/update/update")
+function procupdate()
+	if System.doesFileExist("ux0:/data/phoenix/chat/messages.csv") then
+		System.deleteFile("ux0:/data/phoenix/chat/messages.csv")
+	end
+	if System.doesFileExist("ux0:/data/phoenix/chat/messages.ecsv") then
+		System.deleteFile("ux0:/data/phoenix/chat/messages.ecsv")
+	end
 	sres = {
 		messages = {},
 	}
 	conts = splittotable(result, ',')
-	for i = 1, 4 do
-		if (conts[i]:match('\n')) then
-			endnum = i - 1
-		end
+	sres.result = conts[1]
+	sres.reason = conts[2]
+	sres.version = conts[3]
+	sres.time = conts[4]
+	conts = splittotable(result, ',eof,')
+	file = System.openFile("ux0:/data/phoenix/chat/messages.csv", FCREATE)
+	csvf = ''
+	for i = 1, #conts - 1 do
+		csvf = csvf .. '\n' .. conts[i + 1]
 	end
-	if (endnum == 2) then
-		sres.result = conts[1]
-		sres.version = conts[2]
-	elseif (endnum == 3) then
-		sres.result = conts[1]
-		sres.reason = conts[2]
-		sres.version = conts[3]
-	elseif (endnum == 4) then
-		sres.result = conts[1]
-		sres.reason = conts[2]
-		sres.version = conts[3]
-		sres.time = conts[4]
+	System.writeFile(file, csvf, #csvf)
+	System.closeFile(file)
+	file = System.openFile("ux0:/data/phoenix/chat/messages.ecsv", FCREATE)
+	System.writeFile(file, result, #result)
+	System.closeFile(file)
+	for line in io.lines("ux0:/data/phoenix/chat/messages.csv") do
+		local from, to, contents = line:match("%s*(.-),%s*(.-),%s*(.-),")
+		sres.messages[#sres.messages + 1] = {from = from, contents = contents, to = to,}
 	end
-	for i = 1, (#conts - (endnum + 1)) / 3 do
-		sres.messages[i] = {}
-		sres.messages[i].from = conts[i + endnum + 2]
-		sres.messages[i].to = conts[i + endnum + 3]
-		sres.messages[i].contents = conts[i + endnum + 4]
-	end
-	if (tonumber(sres.version) < 0.6) then
-		addon = '' --im too lazy to make json work lol
-		System.deleteFile("ux0:/data/phoenix/chat/login.txt")
-		System.exit()
-	else
-		addon = 'csv/'
-	end
-	if (sres.reason == "account creation not allowed") or (tonumber(sres.version) > tonumber(version)) then
-		System.deleteFile("ux0:/data/phoenix/chat/login.txt")
-		System.exit()
-	end
+end
+function calckeys()
 	keys = {
-		[0.5] = tonumber(result.time) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765),
-		[0.6] = (tonumber(result.time) / 200) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765),
+		[0.5] = tonumber(sres.time) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765),
+		[0.6] = (tonumber(sres.time) / 200) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765),
+		[0.7] = (tonumber(sres.time) / 200) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765 + (tonumber(sres.time) % 69)),
 	}
-	result = Network.requestString(logtbl[3] .. "/" .. logtbl[1] .. "/" .. logtbl[2] .. "/" .. keys[tonumber(version)] .. "/" .. addon .. "update")
-	--csv stuff
+end
+function update() --update by csv method, json can be implimented by you
+	result = Network.requestString(logtbl[3] .. "/login/" .. logtbl[1] .. "/" .. logtbl[2] .. "/0/csv/update")
+	procupdate()
+	if (tonumber(sres.version) < 0.6) then --im too lazy to make json work lol
+		System.deleteFile("ux0:/data/phoenix/chat/login.txt")
+		System.exit()
+	end
+	if (sres.reason == "account creation not allowed") or (tonumber(sres.version) > tonumber(version)) or (sres.reason == "invalid password") then
+		System.deleteFile("ux0:/data/phoenix/chat/login.txt")
+		System.exit()
+	end
+	calckeys()
+	result = Network.requestString(logtbl[3] .. "/login/" .. logtbl[1] .. "/" .. logtbl[2] .. "/" .. keys[tonumber(version)] .. "/csv/update")
+	procupdate()
 	timer = 0
 end
 update()
@@ -220,7 +225,7 @@ loop = 1
 updates = 0
 while loop == 1 do
 	timer = timer + 1
-	if (timer == 30) then
+	if (timer == 60) then
 		update()
 		updates = updates + 1
 	end
