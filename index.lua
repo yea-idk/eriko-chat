@@ -14,8 +14,7 @@ sel = Color.new(203, 171, 155) --eriko
 math.randomseed(System.getFreeSpace("ux0:"))
 eriko = Graphics.loadImage("app0:/image/Eriko" .. math.random(8) .. ".png")
 meiryo = Font.load("app0:/font/Meiyro.ttf")
---json = require('deps/json.json')
-version = "0.5"
+version = "0.6"
 
 function splittotable(str, splt)
 	local tmp = {}
@@ -40,6 +39,30 @@ function hasValue(tab, val)
 	end
 	return false
 end
+--https://gist.github.com/liukun/f9ce7d6d14fa45fe9b924a3eed5c3d99
+char_to_hex = function(c)
+	return string.format("%%%02X", string.byte(c))
+end
+function urlencode(url)
+	if url == nil then
+		return
+	end
+	url = url:gsub("\n", "\r\n")
+	str = string.gsub(str, "([^%w _%%%-%.~])", char_to_hex)
+	url = url:gsub(" ", "+")
+	return url
+end
+hex_to_char = function(x)
+	return string.char(tonumber(x, 16))
+end
+urldecode = function(url)
+	if url == nil then
+		return
+	end
+	url = url:gsub("+", " ")
+	url = url:gsub("%%(%x%x)", hex_to_char)
+	return url
+end
 
 loop = 1
 timer = 0
@@ -49,10 +72,21 @@ server = "http://eriko.one:30080"
 fx = 0
 fy = 0
 keyb = 3
+if System.doesFileExist("ux0:/data/phoenix/chat/login.txt") then
+	file = System.openFile("ux0:/data/phoenix/chat/login.txt", FREAD)
+	size = System.sizeFile(file)
+	contents = System.readFile(file, size)
+	System.closeFile(file)
+	loop = 0
+end
 while loop == 1 do
 	disppassword = ''
-	for 1 = 1, #password do
-		disppassword = disppassword .. '*'
+	if (#password < 21) then
+		for i = 1, #password do
+			disppassword = disppassword .. '*'
+		end
+	else
+		disppassword = '*********************'
 	end
 	Graphics.initBlend()
 	Screen.clear()
@@ -88,8 +122,14 @@ while loop == 1 do
 		end
 		if (keyb == 0) then
 			username = Keyboard.getInput()
+			if(username:match("%W")) then
+				username = 'Username'
+			end
 		elseif (keyb == 1) then
 			password = Keyboard.getInput()
+			if(password:match("%W")) then
+				password = 'Password'
+			end
 		elseif (keyb == 2) then
 			server = Keyboard.getInput()
 		end
@@ -112,7 +152,7 @@ while loop == 1 do
 			end
 		end
 		if (fy >= 346) and (fy <= 403) and (fx >= 430) and (fx <= 530) then
-			file = System.openFile("ux0:/data/phoenix/chat/login.txt", FWRITE)
+			file = System.openFile("ux0:/data/phoenix/chat/login.txt", FCREATE)
 			contents = username .. "\n" .. password .. "\n" .. server
 			System.writeFile(file, contents, #contents)
 			System.closeFile(file)
@@ -126,17 +166,52 @@ end
 logtbl = splittotable(contents, "\n")
 Network.init()
 function update()
-	result = Network.requestString(logtbl[3] .. "/" .. logtbl[1] .. "/" .. logtbl[2] .. "/0/update")
-	result = json.decode(result)
-	if (result.reason == "account creation not allowed") or (tonumber(result.version) > tonumber(version)) then
+	result = Network.requestString(logtbl[3] .. "/" .. logtbl[1] .. "/" .. logtbl[2] .. "/0/update/update")
+	sres = {
+		messages = {},
+	}
+	conts = splittotable(result, ',')
+	for i = 1, 4 do
+		if (conts[i]:match('\n')) then
+			endnum = i - 1
+		end
+	end
+	if (endnum == 2) then
+		sres.result = conts[1]
+		sres.version = conts[2]
+	elseif (endnum == 3) then
+		sres.result = conts[1]
+		sres.reason = conts[2]
+		sres.version = conts[3]
+	elseif (endnum == 4) then
+		sres.result = conts[1]
+		sres.reason = conts[2]
+		sres.version = conts[3]
+		sres.time = conts[4]
+	end
+	for i = 1, (#conts - (endnum + 1)) / 3 do
+		sres.messages[i] = {}
+		sres.messages[i].from = conts[i + endnum + 2]
+		sres.messages[i].to = conts[i + endnum + 3]
+		sres.messages[i].contents = conts[i + endnum + 4]
+	end
+	if (tonumber(sres.version) < 0.6) then
+		addon = '' --im too lazy to make json work lol
+		System.deleteFile("ux0:/data/phoenix/chat/login.txt")
+		System.exit()
+	else
+		addon = 'csv/'
+	end
+	if (sres.reason == "account creation not allowed") or (tonumber(sres.version) > tonumber(version)) then
 		System.deleteFile("ux0:/data/phoenix/chat/login.txt")
 		System.exit()
 	end
-	if (result.version == "0.5") then
-		authkey = tonumber(result.time) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765)
-	end
-	result = Network.requestString(logtbl[3] .. "/" .. logtbl[1] .. "/" .. logtbl[2] .. "/" .. authkey .. "/update")
---	result = json.decode(result)
+	keys = {
+		[0.5] = tonumber(result.time) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765),
+		[0.6] = (tonumber(result.time) / 200) + (#logtbl[1] * 653987 + #logtbl[2] * 6453765),
+	}
+	result = Network.requestString(logtbl[3] .. "/" .. logtbl[1] .. "/" .. logtbl[2] .. "/" .. keys[tonumber(version)] .. "/" .. addon .. "update")
+	--csv stuff
 	timer = 0
 end
 update()
@@ -160,8 +235,8 @@ while loop == 1 do
 	Graphics.fillRect(430, 530, 346, 403, bg1)
 	Font.setPixelSizes(meiryo, 35)
 	Font.print(meiryo, 251, 146, 'updates: ' .. updates, bg0)
-	Font.print(meiryo, 251, 206, 'recent message: ' .. result.messages[#result.messages].content, bg0)
-	Font.print(meiryo, 251, 266, server, bg0)
+	Font.print(meiryo, 251, 206, 'recent message: ' .. sres.messages[#sres.messages].contents, bg0)
+	Font.print(meiryo, 251, 266, server .. ' ' .. sres.version, bg0)
 	Font.print(meiryo, 433, 350, "Logged in put something here faggot", bg0)
 	Graphics.termBlend()
 	Screen.flip()

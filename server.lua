@@ -2,11 +2,14 @@ sdomain = 'eriko.one'      --set the domain name, set to IP if you do not have o
 sport = 30080              --set the port to open
 saddress = '45.79.193.124' --set the server IP
 snusers = 1                --allow account creation
+masterkey = 'enable69420'  --skip authentication for testing, change any letter in enable to disable this
+csva = 0                   --always return modified csv format (disable most 3rd party clients)
+maxdelay = 2               --number of seconds allowed to login before 2fpass is reset, set this to a whole number
 
 ------------------------------------------
 --do not change anything below this line--
 ------------------------------------------
-sversion = '0.5'
+sversion = '0.6'
 print('The current server software version is ' .. sversion .. '\nClients older than this will be unable to connect, please consider updating to the latest available version.')
 http = require('http')
 json = require('deps/json.json')
@@ -40,27 +43,49 @@ codes = {
 function perror(num)
 	print(codes[num])
 end
-function decodeURI(s)
-	if(s) then
-		s = string.gsub(s, '%%(%x%x)', 
-			function (hex) return string.char(tonumber(hex,16)) end )
+
+--https://gist.github.com/liukun/f9ce7d6d14fa45fe9b924a3eed5c3d99
+char_to_hex = function(c)
+	return string.format("%%%02X", string.byte(c))
+end
+function urlencode(url)
+	if url == nil then
+		return
 	end
-	return s
+	url = url:gsub("\n", "\r\n")
+	str = string.gsub(str, "([^%w _%%%-%.~])", char_to_hex)
+	url = url:gsub(" ", "+")
+	return url
+end
+hex_to_char = function(x)
+	return string.char(tonumber(x, 16))
+end
+urldecode = function(url)
+	if url == nil then
+		return
+	end
+	url = url:gsub("+", " ")
+	url = url:gsub("%%(%x%x)", hex_to_char)
+	return url
 end
 
 defaulttbl = 'Eriko (system),Eriko (system),Hey! Welcome to Eriko Chat!\\nYour home address is http://' .. sdomain .. ':' .. sport .. ' use this during login otherwise you will be unable to access your account!\\nThe default home address is http://eriko.one:30080\\nYou cannot communicate with other homes at the moment. Please register with other homes if you wish to use them.,'
 
---/login/[user]/[pass]/[2fpass]/[type]/[target]/[content]/
---|  2  |   3  |   4  |  5     |   6  |    7   |    8    |
---                     update
+--/login/[user]/[pass]/[2fpass]/[format]/[type]/[target]/[content]/
+--|  2  |   3  |   4  |  5     |   6    |  7   |   8    |    9    |
+--                              json     update
+--                              csv      post
 http.createServer(function (req, res)
 	notrequest = 0
 	loggedin = 0
 	print(req.method .. ' ' .. req.url)
 	if (req.method == 'GET') then
 		urltbl = splittotable(req.url, '/')
-		if (req.url == '/') or (#urltbl < 4) then --not a message request
+		if (req.url == '/') or (#urltbl < 6) then --not a message request
 			notrequest = 1
+		end
+		if (csva == 1) then
+			urltbl[6] = 'csv'
 		end
 		if (urltbl[2] == 'login') then
 			if (urltbl[3]) and (urltbl[4]) and (urltbl[5]) then
@@ -72,7 +97,7 @@ http.createServer(function (req, res)
 						file:write(urltbl[4])
 						file:close()
 						file = io.open('./users/' .. urltbl[3] .. '.key', 'w')
-						file:write(os.time() + 10)
+						file:write(os.time() + maxdelay)
 						file:close()
 						file = io.open('./users/' .. urltbl[3] .. '.csv', 'w')
 						file:write(defaulttbl)
@@ -86,8 +111,14 @@ http.createServer(function (req, res)
 							version = sversion,
 						}
 						res:setHeader("Content-Type", "text/plain")
-						res:setHeader("Content-Length", #json.encode(body))
-						res:finish(json.encode(body))
+						if (urltbl[6] == 'csv') then
+							csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',\n,nothing,nothing,nothing,'
+							res:setHeader("Content-Length", #csvb)
+							res:finish(csvb)
+						else
+							res:setHeader("Content-Length", #json.encode(body))
+							res:finish(json.encode(body))
+						end
 						return
 					end
 				end
@@ -101,36 +132,42 @@ http.createServer(function (req, res)
 						version = sversion,
 					}
 					res:setHeader("Content-Type", "text/plain")
-					res:setHeader("Content-Length", #json.encode(body))
-					res:finish(json.encode(body))
+					if (urltbl[6] == 'csv') then
+						csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',\n,nothing,nothing,nothing,'
+						res:setHeader("Content-Length", #csvb)
+						res:finish(csvb)
+					else
+						res:setHeader("Content-Length", #json.encode(body))
+						res:finish(json.encode(body))
+					end
 				else
 					file = io.open('./users/' .. urltbl[3] .. '.key', 'r')
 					userkey = file:read('*a')
 					file:close()
 					if (os.time() > tonumber(userkey)) then
 						file = io.open('./users/' .. urltbl[3] .. '.key', 'w')
-						file:write(os.time() + 10)
+						file:write(os.time() + maxdelay)
 						file:close()
 						file = io.open('./users/' .. urltbl[3] .. '.key', 'r')
 						userkey = file:read('*a')
 						file:close()
 					end
-					if (tonumber(urltbl[5]) == tonumber(userkey) + (#urltbl[3] * 653987 + #urltbl[4] * 6453765)) then
+					if (tonumber(urltbl[5]) == (tonumber(userkey) / 200) + (#urltbl[3] * 653987 + #urltbl[4] * 6453765)) or (urltbl[5] == masterkey) and (masterkey:match('enable')) then
 						loggedin = 1
 						body = {
 							result = 'success',
 							version = sversion,
 						}
-						if (urltbl[6]) then
-							if (urltbl[6] == 'update') then
+						if (urltbl[7]) then
+							if (urltbl[7] == 'update') then
 								body.messages = {}
 								for line in io.lines("./users/" .. urltbl[3] .. ".csv") do
 									local from, to, contents = line:match("%s*(.-),%s*(.-),%s*(.-),")
 									body.messages[#body.messages + 1] = {from = from, contents = contents, to = to,}
 								end
-							elseif (urltbl[6] == 'post') then
-								if (urltbl[7]) and (urltbl[8]) then
-									file = io.open('./users/' .. urltbl[7], 'r')
+							elseif (urltbl[7] == 'post') then
+								if (urltbl[8]) and (urltbl[9]) then
+									file = io.open('./users/' .. urltbl[8], 'r')
 									if not (file) then
 										perror(9)
 										body = {
@@ -139,17 +176,23 @@ http.createServer(function (req, res)
 											version = sversion,
 										}
 										res:setHeader("Content-Type", "text/plain")
-										res:setHeader("Content-Length", #json.encode(body))
-										res:finish(json.encode(body))
+										if (urltbl[6] == 'csv') then
+											csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',\n,nothing,nothing,nothing,'
+											res:setHeader("Content-Length", #csvb)
+											res:finish(csvb)
+										else
+											res:setHeader("Content-Length", #json.encode(body))
+											res:finish(json.encode(body))
+										end
 										return
 									else
 										file:close()
 									end
-									file = io.open('./users/' .. urltbl[7] .. '.csv', 'a+')
-									file:write('\n' .. urltbl[3] .. ',' .. urltbl[3] .. ',' .. decodeURI(urltbl[8]) .. ',')
+									file = io.open('./users/' .. urltbl[8] .. '.csv', 'a+')
+									file:write('\n' .. urltbl[3] .. ',' .. urltbl[3] .. ',' .. decodeURI(urltbl[9]) .. ',')
 									file:close()
 									file = io.open('./users/' .. urltbl[3] .. '.csv', 'a+')
-									file:write('\n' .. urltbl[3] .. ',' .. urltbl[7] .. ',' .. decodeURI(urltbl[8]) .. ',')
+									file:write('\n' .. urltbl[3] .. ',' .. urltbl[8] .. ',' .. decodeURI(urltbl[9]) .. ',')
 									file:close()
 								else
 									perror(8)
@@ -161,8 +204,17 @@ http.createServer(function (req, res)
 							perror(2)
 						end
 						res:setHeader("Content-Type", "text/plain")
-						res:setHeader("Content-Length", #json.encode(body))
-						res:finish(json.encode(body))
+						if (urltbl[6] == 'csv') then
+							file = io.open("./users/" .. urltbl[3] .. ".csv", "r")
+							csvc = file:read("*a")
+							csvb = body.result .. ',' .. body.version .. '\n,' .. csvc
+							file:close()
+							res:setHeader("Content-Length", #csvb)
+							res:finish(csvb)
+						else
+							res:setHeader("Content-Length", #json.encode(body))
+							res:finish(json.encode(body))
+						end
 					else
 						perror(7)
 						body = {
@@ -172,8 +224,14 @@ http.createServer(function (req, res)
 							time = userkey,
 						}
 						res:setHeader("Content-Type", "text/plain")
-						res:setHeader("Content-Length", #json.encode(body))
-						res:finish(json.encode(body))
+						if (urltbl[6] == 'csv') then
+							csvb = body.result .. ',' .. body.reason .. ',' .. body.version .. ',' .. body.time .. ',\n,nothing,nothing,nothing,'
+							res:setHeader("Content-Length", #csvb)
+							res:finish(csvb)
+						else
+							res:setHeader("Content-Length", #json.encode(body))
+							res:finish(json.encode(body))
+						end
 					end
 				end
 			end
